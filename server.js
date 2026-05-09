@@ -41,3 +41,5 @@ ${text}`
 app.listen(port, () => {
     console.log(`서버가 시작되었습니다. http://localhost:${port} 에 접속해주세요.`);
 });
+
+module.exports = app;
