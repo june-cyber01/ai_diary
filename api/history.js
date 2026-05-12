@@ -1,4 +1,5 @@
 const redis = require('redis');
+const supabase = require('../utils/supabase');
 
 module.exports = async (req, res) => {
     if (req.method === 'OPTIONS') {
@@ -8,6 +9,20 @@ module.exports = async (req, res) => {
     if (req.method !== 'GET') {
         return res.status(405).json({ error: 'Method Not Allowed' });
     }
+
+    // 사용자 인증 검증
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: '인증되지 않은 사용자입니다.' });
+    }
+    const token = authHeader.split(' ')[1];
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    if (authError || !user) {
+        return res.status(401).json({ error: '유효하지 않은 인증 토큰입니다.' });
+    }
+    
+    const userId = user.id;
 
     try {
         const redisUrl = process.env.redis_url || process.env.REDIS_URL;
@@ -19,8 +34,8 @@ module.exports = async (req, res) => {
         client.on('error', (err) => console.log('Redis Client Error', err));
         await client.connect();
 
-        // 모든 일기 키 가져오기 (diary-* 형태)
-        const keys = await client.keys('diary-*');
+        // 사용자 고유의 일기 키 가져오기 (diary-{userId}-* 형태)
+        const keys = await client.keys(`diary-${userId}-*`);
         let diaries = [];
 
         if (keys.length > 0) {

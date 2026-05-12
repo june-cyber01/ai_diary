@@ -1,5 +1,6 @@
 const { GoogleGenAI } = require('@google/genai');
 const redis = require('redis');
+const supabase = require('../utils/supabase');
 
 module.exports = async (req, res) => {
     // CORS 처리 (프론트엔드와 다른 도메인일 경우 대비)
@@ -11,6 +12,20 @@ module.exports = async (req, res) => {
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method Not Allowed' });
     }
+
+    // 사용자 인증 검증
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ error: '인증되지 않은 사용자입니다. 로그인해주세요.' });
+    }
+    const token = authHeader.split(' ')[1];
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    if (authError || !user) {
+        return res.status(401).json({ error: '유효하지 않은 인증 토큰입니다. 다시 로그인해주세요.' });
+    }
+    
+    const userId = user.id;
 
     try {
         const { text } = req.body;
@@ -39,7 +54,7 @@ ${text}`
             client.on('error', (err) => console.log('Redis Client Error', err));
             await client.connect();
 
-            // diary-YYYYMMDDHHMMSS 형식의 키 생성
+            // diary-{userId}-YYYYMMDDHHMMSS 형식의 키 생성
             const now = new Date();
             const year = now.getFullYear();
             const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -47,7 +62,7 @@ ${text}`
             const hours = String(now.getHours()).padStart(2, '0');
             const minutes = String(now.getMinutes()).padStart(2, '0');
             const seconds = String(now.getSeconds()).padStart(2, '0');
-            const id = `diary-${year}${month}${day}${hours}${minutes}${seconds}`;
+            const id = `diary-${userId}-${year}${month}${day}${hours}${minutes}${seconds}`;
 
             // 일기 데이터(원본 및 답변) 저장
             const diaryData = {
