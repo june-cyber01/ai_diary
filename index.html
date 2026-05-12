@@ -187,6 +187,53 @@
             align-items: flex-start;
         }
 
+        .history-section {
+            margin-top: 40px;
+            border-top: 1px solid #e2e8f0;
+            padding-top: 32px;
+        }
+
+        .history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .history-card {
+            background: var(--surface);
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .history-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.05);
+        }
+
+        .history-date {
+            font-size: 13px;
+            color: var(--text-light);
+            margin-bottom: 8px;
+        }
+
+        .history-original {
+            font-size: 15px;
+            color: var(--text-main);
+            margin-bottom: 12px;
+            line-height: 1.5;
+            padding-bottom: 12px;
+            border-bottom: 1px dashed #e2e8f0;
+        }
+
+        .history-response {
+            font-size: 14px;
+            color: var(--text-main);
+            line-height: 1.6;
+        }
+
         @media (max-width: 480px) {
             .button-group {
                 flex-direction: column;
@@ -223,6 +270,15 @@
                 여기에 AI의 답변이 표시됩니다.
             </div>
         </div>
+
+        <div class="history-section">
+            <h2>
+                <span class="button-icon">📚</span> 나의 일기 히스토리
+            </h2>
+            <div class="history-list" id="historyList">
+                <div class="ai-response" style="background: transparent; border: none;">히스토리를 불러오는 중...</div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -242,7 +298,44 @@
                 aiResponseBox.innerHTML = savedResponse;
                 aiResponseBox.classList.add('active');
             }
+
+            loadHistory();
         });
+
+        async function loadHistory() {
+            const historyList = document.getElementById('historyList');
+            try {
+                const response = await fetch('/api/history');
+                const data = await response.json();
+                
+                if (response.ok && data.history) {
+                    if (data.history.length === 0) {
+                        historyList.innerHTML = '<div class="ai-response" style="background: transparent; border: none; box-shadow: none;">저장된 일기가 없습니다.</div>';
+                        return;
+                    }
+                    
+                    historyList.innerHTML = data.history.map(item => {
+                        const dateObj = item.createdAt ? new Date(item.createdAt) : new Date();
+                        const dateStr = dateObj.toLocaleString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                        const original = item.original || '';
+                        const aiResponse = item.response ? item.response.replace(/\n/g, '<br>') : '';
+                        
+                        return `
+                            <div class="history-card">
+                                <div class="history-date">${dateStr}</div>
+                                <div class="history-original">${original}</div>
+                                <div class="history-response">${aiResponse}</div>
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    historyList.innerHTML = `<div class="ai-response" style="background: transparent; border: none; color: red;">오류: ${data.error || '알 수 없는 오류'}</div>`;
+                }
+            } catch (error) {
+                console.error(error);
+                historyList.innerHTML = '<div class="ai-response" style="background: transparent; border: none; color: red;">히스토리를 불러오지 못했습니다.</div>';
+            }
+        }
 
         // Voice Input Simulation (or Web Speech API)
         const voiceBtn = document.getElementById('voiceBtn');
@@ -279,6 +372,9 @@
                     // Save to local storage
                     localStorage.setItem('diaryContent', text);
                     localStorage.setItem('aiResponse', formattedResult);
+                    
+                    // Update history
+                    loadHistory();
                 } else {
                     aiResponseBox.innerHTML = `오류: ${data.error}`;
                 }
